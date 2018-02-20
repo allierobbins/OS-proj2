@@ -17,4 +17,4 @@ producer.o: producer.c
 	gcc -c producer.c
 
 clean:
-	rm *.o master consumer producer *.out
+	rm *.o master consumer producer *.o
