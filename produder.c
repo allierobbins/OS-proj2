@@ -11,7 +11,7 @@
 #include <sys/ipc.h>
 
 void endProgram();     // Prototypes
-int detachAndRemove(int, void *);
+int detachAndRemove();
 
 struct SharedSpace {     // Struct for shared memory
 	int sharedVar;
@@ -31,12 +31,12 @@ int main(int argc, char* argv[]) {
 
 	signal(SIGINT, endProgram);     // Signal Handler
 
-	if((shmID = shmget(key, sizeof(struct SharedMemory) * 2, 0666)) < 0) {     // Get shared memory id from master process                                                         // If no shared memory id is caught - exit
+	if((shmID = shmget(key, sizeof(struct SM) * 3)) < 0) {     // Get shared memory id from master process                                                         // If no shared memory id is caught - exit
 		perror("Error when getting shared memory ID.\n");
 		exit(1);
 	}
 
-    if ((shmem = (struct SharedMemory *)shmat(shmID, NULL, 0)) == (struct SharedMemory *) -1) {     	// Attach shared memory to consumer process
+    if ((shmem = (struct SM *)shmat(shmID, NULL, 0)) == (struct SM *) -1) {     	// Attach shared memory to consumer process
 		perror("Error when attaching to shared memory.\n");      // Error message if shared memory is not attached & exit
         exit(1);
     }
@@ -46,7 +46,7 @@ int main(int argc, char* argv[]) {
       int i, status;     //variables
 
     	for(i = 0; i < size; i++) {      // Check PIDs status
-    		pid_t wid = waitpid(consumerList[c], &status, WNOHANG);
+    		pid_t wid = waitpid(consumerList[i], &status, WNOHANG);
 
     		if(wid != 0) {
     			consumerList[i] = 0;
@@ -59,34 +59,26 @@ int main(int argc, char* argv[]) {
     		else      // Process is done - return 0
     			return 0;
     	}
-    		return 1;
-
 
     return 0;
-  }
+}
 
-  void endProgram() {      // Kills all processes when signaled
+void endProgram() {      // Kills all processes when signaled
 
-    pid_t id = getpid();
-
-    if (detachAndRemove(id, sharedtotal) == -1) {     // Detach shared memory
+    if (detachAndRemove() == -1) {     // Detach shared memory
     perror("Failed to destroy shared memory segment");      //
     return 1;
     }
 
       killpg(id, SIGINT);
       exit(EXIT);
-  }
+}
 
-  int detachAndRemove(int shmID, void *shmaddr) {
-    int error = 0;
+int detachAndRemove() {
 
-    if (shmdt(shmaddr) == -1)
-      error = errno;
-    if ((shmctl(shmID, IPC_RMID, NULL) == -1) && !error)
-      error = errno;
-    if (!error)
-      return 0;
-      errno = error;
-      return -1;
-  }
+  if (shmdt(num) && shmdt(turn) && shmdt(flag) && shmctl(sharedMem, IPC_RMID, NULL))
+    return 1;
+  else
+    return -1;
+}
+
