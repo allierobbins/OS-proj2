@@ -1,5 +1,3 @@
-all: master consumer
-
 master: master.o
 	gcc -o master master.o
 
@@ -12,10 +10,11 @@ consumer: consumer.o
 consumer.o: consumer.c
 	gcc -c consumer.c
 
-clean: remove
+producer:producer.o
+	gcc -o producer producer.o
 
-remove:
-	rm *.o master consumer *.out
+producer.o: producer.c
+	gcc -c producer.c
 
-success:
-	$(info SUCCESS)
+clean:
+	rm *.o master consumer producer *.out
