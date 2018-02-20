@@ -10,109 +10,113 @@
 #include <sys/types.h>
 #include <sys/ipc.h>
 
-void signalHandler();     // Prototypes
-void killAll();
+void endProgram();     // Prototypes
+int detachAndRemove(int, void *);
 
-struct SharedMemory {     // Struct for shared memory
+struct SharedSpace {     // Struct for shared memory
 	int sharedVar;
 	int turn;
-	int flag[19];
-	int maxWrites;
+	int flag[];
 	int consumerProcesses;
 	int processes;
 };
 
 enum state {waiting, wantInCS, inCriticalSection};      // States for CS flags
 
-int shmid;      //  Global variables
-struct SharedMemory *shmem;
-key_t key = 2018;
+int shmID;      //  Global variables
+struct SharedSpace *SM;
 
 int main(int argc, char* argv[]) {
 
-	signal(SIGINT, signalHandler);     // Signal Handler
+	signal(SIGINT, endProgram);     // Signal Handler
 
-	int i = atoi(argv[0]);       // Get passed arguments from execl
-	logFile = argv[1];
-
-	if((shmid = shmget(key, sizeof(struct SharedMemory) * 2, 0666)) < 0) {     // Get shared memory id from master process
-		perror("shmget");                                                         // If no shared memory id is caught - eexit
-		printf(stderr, "Error getting shared memory id - ending program.\n");
-		exit(EXIT_FAILURE);
+	if((shmID = shmget(key, sizeof(struct SharedMemory) * 2, 0666)) < 0) {     // Get shared memory id from master process                                                         // If no shared memory id is caught - exit
+		perror("Error when getting shared memory ID.\n");
+		exit(1);
 	}
 
-    if ((shmem = (struct SharedMemory *)shmat(shmid, NULL, 0)) == (struct SharedMemory *) -1) {     	// Attach shared memory to consumer process
-		perror("shmat");
-        printf(stderr, "Error attaching shared memory - ending program.\n");      // Error message if shared memory is not attached & exit
-        exit(EXIT_FAILURE);
+    if ((SM = (struct SharedMemory *)shmat(shmID, NULL, 0)) == (struct SharedMemory *) -1) {     	// Attach shared memory to consumer process
+		perror("Error when attaching to shared memory.\n");      // Error message if shared memory is not attached & exit
+        exit(1);
     }
 
-	int a, b, c = shmem->consumerProcesses;      // Algorithm for CS entry
-	for(a = 0; a < shmem->maxWrites; a++) {
+
+    //printf("My PID is %ld.\n", (long)getpid());
+
+	int a;
+  int b, c = consumerProcesses;      // Algorithm for CS entry
+
+	do {
 		do {
-			shmem->flag[i] = wantInCS;     // Set flags to 'wanting in CS'
 
-			b = shmem->turn;     // Assignment
+			SM.flag[i] = wantInCS;     // Set flags to 'wanting in CS'
+			b = *turn;     // Assignment
+			while(b != i)
+				b = (SM.flag[b] != waiting) ? *turn : (b + 1) % c;      // Set flag to 'waiting'
 
-			while(b != i) {
-				b = (shmem->flag[b] != waiting) ? shmem->turn : (b + 1) % c;      // Set flag to 'waiting'
-			}
+			SM.flag[i] = inCriticalSection;      // Declare wanting to enter CS
 
-			shmem->flag[i] = inCriticalSection;      // Declare wanting to enter CS
-
-			for(b = 0; b < c; b++) {
-				if((b != i) && (shmem->flag[b] == inCriticalSection)) {     // See if anyone else is in CS
+			for(b = 0; b < c; b++)
+				if((b != i) && (SM.flag[b] == inCriticalSection))     // See if anyone else is in CS
 					break;
-				}
-			}
-		} while((b < c) || ((shmem->turn != i) && (shmem->flag[shmem->turn] != waiting)));
 
-		shmem->turn = i;      // Assign to self - go into CS
+		} while((b < c) || ((*turn != i) && SM.flag[*turn] != waiting));
 
+		*turn = i;      // Assign to self - go into CS
+		printf("pid %i - entering Critical Section.\n", getpid());      //CS
 
-		printf(stderr, "Child PID: %i - Entering Critical Section.\n", getpid());      //CS
-
-		struct timespec tm;     // Setting up for random # between 0 - 5
-		clock_gettime(CLOCK_MONOTONIC, &tm);
-		srand((unsigned)(tm.tv_sec ^ tm.tv_nsec ^ (tm.tv_nsec >> 30)));
+		srand((unsigned int)time(NULL));
 		sleep((rand() % 5));        		// Sleep for 0 - 5 seconds
 
-		char *t = malloc(10);
-		time_t theTime;
-		theTime = time(NULL);                 // Getting time in HH:MM:SS for log
-		struct tm *p = localtime(&theTime);
-		strftime(t, 10, "%H:%M:%S", p);
+		sharedVar++;     		// Increase sharedVar in shared memory
 
-		shmem->sharedVar++;     		// Increase sharedVar in shared memory
-
-		printf("\tFile modified by process number %i at time %s with sharedNum = %d.\n", i, t, shmem->sharedVar);      // Print log message
+		printf("File modified by process number %i at time %s with sharedNum = %d.\n", i, t, SM.sharedVar);      // Print log message
 
 		sleep((rand() % 5));      	// Sleep for 0 - 5 seconds
 
 
-		b = (shmem->turn + 1) % c;
-		while(shmem->flag[b] == waiting) {      // Exit CS
+		b = (*turn + 1) % c;
+		while (flag[b] == waiting) {      // Exit CS
 			b = (b + 1) % c;
 		}
-		printf(stderr, "\t\tChild PID: %i - Exiting Critical Section.\n\n", getpid());     // Print message that leaving CS
+		printf("Child PID: %i - Leaving Critical Section.\n", (long)getpid());     // Print message that leaving CS
 
-		shmem->turn = b;      // Give turn to next process 'wanting in CS'
-		shmem->flag[i] = waiting;     		// Change flag to waiting
-	}
+		*turn = b;      // Give turn to next process 'wanting in CS'
+		SM.flag[i] = waiting;     		// Change flag to waiting
+	} while (1);
 
-	shmem->processes--;
-	killAll();     // Kill all processes
-	exit(3);     // Exit program
+	SM.processes--;
+
+  if (detachAndRemove(id, sharedtotal) == -1) {     // Detach shared memory
+  perror("Failed to destroy shared memory segment");      //
+  return 1;
 }
 
-void signalHandler() {      // Kills all processes when signaled
-    pid_t id = getpid();
-	printf("Signal received - killing consumer with PID: %i.\n", id);
-	killAll();
+	exit(1);     // Exit program
+}
+
+void endProgram() {      // Kills all processes when signaled
+
+  pid_t id = getpid();
+
+  if (detachAndRemove(id, sharedtotal) == -1) {     // Detach shared memory
+  perror("Failed to destroy shared memory segment");      //
+  return 1;
+  }
+
     killpg(id, SIGINT);
-    exit(EXIT_SUCCESS);
+    exit(EXIT);
 }
 
-void killAll() {      // Detaches shared memory
-	shmdt(shmem);
+int detachAndRemove(int shmID, void *shmaddr) {
+  int error = 0;
+
+  if (shmdt(shmaddr) == -1)
+    error = errno;
+  if ((shmctl(shmID, IPC_RMID, NULL) == -1) && !error)
+    error = errno;
+  if (!error)
+    return 0;
+    errno = error;
+    return -1;
 }
