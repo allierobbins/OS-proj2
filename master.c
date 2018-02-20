@@ -9,10 +9,11 @@
 #include <sys/shm.h>
 #include <sys/types.h>
 #include <sys/ipc.h>
+#define PERM (S_IRUSR | S_IWUSR)
 
 int consumerStatus(pid_t [], int);      // Prototypes
 void endProgram();
-int detachAndRemove(int, void *);
+int detachAndRemove();
 
 struct SharedSpace {     // Struct for shared memory
 	int sharedVar;
@@ -77,7 +78,7 @@ int main(int argc, char* argv[]) {
 			if(conusmer == -1 || producer == -1) {      // If error forking children
 				perror("Error when forking children.\n");
 
-        if (detachAndRemove(id, sharedtotal) == -1) {     // Detach shared memory
+        if (detachAndRemove() == -1) {     // Detach shared memory
         perror("Error when detaching shared memory.\n");      // Error if failed to detach shared memory
         return 1;
         }
@@ -109,7 +110,7 @@ int main(int argc, char* argv[]) {
 		perror("Error in completing all processes in 100 seconds.\n");      //If consumers running - kill all processes & error
 		endProgram();
 	} else {
-    if (detachAndRemove(id, sharedtotal) == -1) {     // Detach shared memory
+    if (detachAndRemove() == -1) {     // Detach shared memory
     perror("Failed to destroy shared memory segment");      // Error if failed ot detach shared memory
     return 1;
     }
@@ -127,7 +128,7 @@ int consumerStatus(pid_t consumerList[], int size) {       // Checks if consumer
 		if(wid != 0) {
 			consumerList[i] = 0;
 		}
-	}
+  }
 
 	for(i = 0; i < size; i++) {
 		if(consumers[i] == 0)     // If process is running - continue
@@ -142,7 +143,7 @@ void endProgram() {      // Kills all when signal is received
     pid_t id = getpgrp();
 	printf("Signal received - exiting master program with PID: %i.\n", id);
 
-  if (detachAndRemove(id, sharedVar) == -1) {
+  if (detachAndRemove() == -1) {
       perror("Failed to destroy shared memory segment");
       return 1;
     }
@@ -151,15 +152,10 @@ void endProgram() {      // Kills all when signal is received
     exit(EXIT_SUCCESS);
 }
 
-int detachAndRemove(int shmID, void *shmaddr) {
-  int error = 0;
+int detachAndRemove() {
 
-  if (shmdt(shmaddr) == -1)
-    error = errno;
-  if ((shmctl(shmID, IPC_RMID, NULL) == -1) && !error)
-    error = errno;
-  if (!error)
-    return 0;
-    errno = error;
+  if (shmdt(num) && shmdt(turn) && shmdt(flag) && shmctl(sharedMem, IPC_RMID, NULL))
+    return 1;
+  else
     return -1;
 }
